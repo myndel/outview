@@ -11,6 +11,7 @@ public class OutViewApp {
     public static void main( String[] args ) {
     	try {
 			MailManager.getInstance().init();
+			MailManager.getInstance().getEmailList();
 		} catch (MailConfigException e) {
 			e.printStackTrace();
 		}

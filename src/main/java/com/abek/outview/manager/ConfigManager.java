@@ -66,4 +66,24 @@ public class ConfigManager implements IManager{
         LOGGER.debug("[PROPERTIES] Config stream found, returning it");
         return configFileStream;
 	}
+
+	public String getHost(){
+		return properties.getProperty(AppConstants.PROPERTY_MAIL_HOST_NAME);
+	}
+	
+	public String getProtocol(){
+		return properties.getProperty(AppConstants.PROPERTY_MAIL_PROTOCOL);
+	}
+	
+	public String getUsername(){
+		return properties.getProperty(AppConstants.PROPERTY_MAIL_USERNAME);
+	}
+	
+	public String getPassword(){
+		return properties.getProperty(AppConstants.PROPERTY_MAIL_PASSWORD);
+	}
+	
+	public Properties getProperties() {
+		return properties;
+	}
 }

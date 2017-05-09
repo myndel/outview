@@ -12,6 +12,8 @@ public class Email {
 
 	private String from;
 	private String subject;
+	private String body;
+	private int index;
 	private List<PJ> attachments;
 	
 	public Email() {
@@ -50,6 +52,22 @@ public class Email {
 
 	public void setAttachments(List<PJ> attachments) {
 		this.attachments = attachments;
+	}
+
+	public String getBody() {
+		return body;
+	}
+
+	public void setBody(String body) {
+		this.body = body;
+	}
+
+	public int getIndex() {
+		return index;
+	}
+
+	public void setIndex(int index) {
+		this.index = index;
 	}
 
 	@Override

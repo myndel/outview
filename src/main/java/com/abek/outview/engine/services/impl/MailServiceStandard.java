@@ -1,8 +1,11 @@
 package com.abek.outview.engine.services.impl;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
+import javax.mail.Address;
+import javax.mail.FetchProfile;
 import javax.mail.Folder;
 import javax.mail.Message;
 import javax.mail.MessagingException;
@@ -11,28 +14,21 @@ import javax.mail.Store;
 
 import org.apache.log4j.Logger;
 
-import com.abek.outview.engine.services.IMailProvider;
 import com.abek.outview.exception.MailConnectException;
 import com.abek.outview.exception.OutputException;
 import com.abek.outview.manager.ConfigManager;
 import com.abek.outview.model.Email;
 
-public class MailServiceStandard implements IMailProvider {
+public class MailServiceStandard extends AbstractMailService {
 	private static Logger LOGGER = Logger.getLogger(MailServiceStandard.class);
-
-	/**
-	 * Instance de configuration à fournir pour amorcer la connexion
-	 */
-	private ConfigManager config;
 
 	public MailServiceStandard(ConfigManager config) {
 		super();
 		this.config = config;
 	}
 
-	@Override
 	public List<Email> listEmails() throws MailConnectException {
-		return null;
+		return emails;
 	}
 
 	@Override
@@ -46,11 +42,7 @@ public class MailServiceStandard implements IMailProvider {
 	@Override
 	public void init() throws MailConnectException {
 		LOGGER.debug("[IMAP/POP3] Initializing connection");
-		if (config == null) {
-			LOGGER.error("[IMAP/POP3] No configuration provided, ConfigManager must not be null");
-			throw new MailConnectException("[IMAP/POP3] No configuration provided, ConfigManager must not be null");
-		}
-
+		super.init();
 		Properties properties = config.getProperties();
 		try {
 			Session emailSession = Session.getDefaultInstance(properties);
@@ -71,20 +63,41 @@ public class MailServiceStandard implements IMailProvider {
 
 			// retrieve the messages from the folder in an array and print it
 			Message[] messages = emailFolder.getMessages();
-			System.out.println("messages.length---" + messages.length);
+			LOGGER.debug(String.format("[IMAP/POP3] Found %d emails", messages.length));
 
-			for (int i = 0, n = messages.length; i < n; i++) {
-				Message message = messages[i];
-				System.out.println("---------------------------------");
-				System.out.println("Email Number " + (i + 1));
-				System.out.println("Subject: " + message.getSubject());
-				System.out.println("From: " + message.getFrom()[0]);
-				System.out.println("Text: " + message.getContent().toString());
-				
+			// Optimisation de la lecture des emails, utiliser le fetch
+			FetchProfile fetchProfile = new FetchProfile();
+			fetchProfile.add(FetchProfile.Item.ENVELOPE);
+			fetchProfile.add(FetchProfile.Item.FLAGS);
+			fetchProfile.add(FetchProfile.Item.CONTENT_INFO);
+			emailFolder.fetch(messages, fetchProfile);
+			
+			int index = 0;
+			ArrayList<Email> bufferEmails = new ArrayList<>(); 
+			for (Message message: messages) {
 				Email email = new Email();
-			}
+				email.setSubject(message.getSubject());
+				if(message.getFrom() != null && message.getFrom().length > 0){
+					Address from = message.getFrom()[0];
+					email.setFrom(from.toString());
+				}
+				email.setBody(message.getContent().toString());
 
-			// close the store and folder objects
+				//TODO get attachment files -> direct output to FS... not in memory
+				index++;
+				
+				if(index > 200){
+					break;
+				}
+				
+				bufferEmails.add(email);
+				LOGGER.debug(String.format("[IMAP/POP3] got %d/%d emails", index, messages.length));
+			}
+			
+			initEmailLists(bufferEmails);
+
+			LOGGER.debug(String.format("[IMAP/POP3] Found %d emails", emails.size()));
+			
 			emailFolder.close(false);
 			store.close();
 

@@ -55,7 +55,12 @@ public class ConfigManager implements IManager{
 		LOGGER.debug("[PROPERTIES] Getting properties stream");
 		
         ClassLoader loader = getClass().getClassLoader();
-        InputStream configFileStream = loader.getResourceAsStream(AppConstants.PROPERTIES_FILE_NAME);
+        // FICHIER TEMPORAIRE DE DEV, NO CREDENTIALS ON GIT
+        InputStream configFileStream = loader.getResourceAsStream(AppConstants.PROPERTIES_DEV_FILE_NAME);
+        if(configFileStream == null){
+        	configFileStream = loader.getResourceAsStream(AppConstants.PROPERTIES_FILE_NAME);
+        }
+        
         
         LOGGER.debug("[PROPERTIES] Properties stream: "+AppConstants.PROPERTIES_FILE_NAME);
         if(configFileStream == null){

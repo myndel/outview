@@ -36,6 +36,7 @@ public class MailManager implements IManager{
 		LOGGER.debug("[MAIL] initializing properties");
 		try {
 			ConfigManager.getInstance().init();
+			FilterManager.getInstance(ConfigManager.getInstance());
 		} catch (ConfigException e) {
 			LOGGER.error("[MAIL] Initialization failed: "+e.getMessage());
 			throw new MailConfigException(e);

@@ -1,5 +1,6 @@
 package com.abek.outview.manager;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
@@ -86,6 +87,19 @@ public class ConfigManager implements IManager{
 	
 	public String getPassword(){
 		return properties.getProperty(AppConstants.PROPERTY_MAIL_PASSWORD);
+	}
+	
+	/**
+	 * retourne le répertoire utilisé pour sauvegarder les emails
+	 * @return
+	 */
+	public String getEmailRepository(){
+		String repository = properties.getProperty(AppConstants.PROPERTY_MAIL_REPOSITORY, "");
+		repository = repository.trim();
+		if(!repository.endsWith(File.separator)){
+			repository += File.separator;
+		}
+		return repository;
 	}
 	
 	public Properties getProperties() {

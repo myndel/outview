@@ -7,9 +7,9 @@ import org.apache.log4j.Logger;
 
 import com.abek.outview.connect.factory.ConnectionFactory;
 import com.abek.outview.engine.services.IMailProvider;
-import com.abek.outview.exception.ConfigException;
 import com.abek.outview.exception.MailConfigException;
 import com.abek.outview.exception.MailConnectException;
+import com.abek.outview.exception.ManagerException;
 import com.abek.outview.manager.interfaces.IManager;
 import com.abek.outview.model.Email;
 
@@ -31,13 +31,16 @@ public class MailManager implements IManager{
 	
 	/**
 	 * Initialise les properties, et les connexions
+	 * @throws MailConfigException 
+	 * @throws ManagerException 
 	 */
-	public void init() throws MailConfigException{
+	public void init() throws MailConfigException {
 		LOGGER.debug("[MAIL] initializing properties");
 		try {
 			ConfigManager.getInstance().init();
-			FilterManager.getInstance(ConfigManager.getInstance());
-		} catch (ConfigException e) {
+			FilesystemManager.getInstance(ConfigManager.getInstance()).init();
+			FilterManager.getInstance(ConfigManager.getInstance()).init();
+		} catch (ManagerException e) {
 			LOGGER.error("[MAIL] Initialization failed: "+e.getMessage());
 			throw new MailConfigException(e);
 		}

@@ -1,5 +1,7 @@
 package com.abek.outview.engine.services.impl;
 
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -7,6 +9,7 @@ import org.apache.log4j.Logger;
 
 import com.abek.outview.engine.services.IMailProvider;
 import com.abek.outview.exception.MailConnectException;
+import com.abek.outview.exception.OutputException;
 import com.abek.outview.manager.ConfigManager;
 import com.abek.outview.manager.FilesystemManager;
 import com.abek.outview.model.Email;
@@ -40,4 +43,19 @@ public abstract class AbstractMailService implements IMailProvider {
 	 */
 	protected abstract void writeToEml(Object messageObject, Email email);
 	
+	/**
+	 * Ecrit dans un TXT le contenu du mail
+	 * @param email
+	 * @throws OutputException 
+	 */
+	protected void writeToTxt(Email email) throws OutputException{
+		LOGGER.debug("[MAIL PROVIDER] Writing body txt mail ");
+		try {
+			fileSystem.writeEmail(email);
+		} catch (FileNotFoundException e) {
+			LOGGER.error("[MAIL PROVIDER] Failed writing body txt mail");
+			throw new OutputException("Failed writing body txt mail: "+e.getMessage());
+		}
+		LOGGER.debug("[MAIL PROVIDER] Finished writing body txt mail ");
+	}
 }

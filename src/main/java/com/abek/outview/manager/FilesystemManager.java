@@ -1,10 +1,13 @@
 package com.abek.outview.manager;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintWriter;
 
+import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.log4j.Logger;
 
 import com.abek.outview.AppConstants;
@@ -123,27 +126,52 @@ public class FilesystemManager implements IManager {
 			attachmentFilname += File.separator + email.getIndex() + "_" + filename;
 			
 			LOGGER.debug("[FS Manager] writing PJ: "+attachmentFilname);
-//		try {
-//			FileOutputStream fios = new FileOutputStream(attachmentFilname);
-//			byte[] buffer = new byte[1024 * 32];
-//	        int len = inputStream.read(buffer);
-//	        
-//	        while (len != -1) {
-//	        	fios.write(buffer, 0, len);
-//	            len = inputStream.read(buffer);
-//	        }
-//	        
-//	        inputStream.close();
-//	        fios.flush();
-//	        fios.close();
-//		} catch (IOException  e) {
-//			LOGGER.error("[FS Manager] Failed writing attachment: "+e.getMessage());
-//			throw new FilesystemException(e);
-//		}
+		try {
+			FileOutputStream fios = new FileOutputStream(attachmentFilname);
+			byte[] buffer = new byte[1024 * 32];
+	        int len = inputStream.read(buffer);
+	        
+	        while (len != -1) {
+	        	fios.write(buffer, 0, len);
+	            len = inputStream.read(buffer);
+	        }
+	        
+	        inputStream.close();
+	        fios.flush();
+	        fios.close();
+		} catch (IOException  e) {
+			LOGGER.error("[FS Manager] Failed writing attachment: "+e.getMessage());
+			throw new FilesystemException(e);
+		}
 		LOGGER.debug("[FS Manager] Finished writing attachment");
 	}
 
 	public String getEmailFolder(Email email) {
 		return  config.getEmailRepository() + getFolderFor(email);
+	}
+
+	/**
+	 * Ecrit le fichier dans un fichier text
+	 * @param email
+	 * @throws FileNotFoundException 
+	 */
+	public void writeEmail(Email email) throws FileNotFoundException {
+		String filename = getEmailFolder(email);
+		filename += File.separator + email.getIndex()+".txt";
+		
+		StringBuilder mailContent = new StringBuilder();
+		
+		mailContent.append(email.getSubject());
+		mailContent.append("\n");
+		mailContent.append("\n");
+		mailContent.append("\n");
+		String rawBody = email.getBody();
+		String escapedBody = StringEscapeUtils.escapeHtml4(rawBody);
+		mailContent.append(escapedBody);
+		
+		
+		PrintWriter out = new PrintWriter(filename);
+		out.print(mailContent.toString());
+		out.close();
 	}
 }

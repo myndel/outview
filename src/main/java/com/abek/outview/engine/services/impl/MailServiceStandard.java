@@ -16,6 +16,7 @@ import javax.mail.Multipart;
 import javax.mail.Part;
 import javax.mail.Session;
 import javax.mail.Store;
+import javax.mail.internet.MimeMultipart;
 
 import org.apache.log4j.Logger;
 
@@ -53,6 +54,7 @@ public class MailServiceStandard extends AbstractMailService {
 		super.init();
 		Properties properties = config.getProperties();
 		FilterManager filter = FilterManager.getInstance(config);
+		FilesystemManager fileSystem = FilesystemManager.getInstance(config);
 		try {
 			Session emailSession = Session.getDefaultInstance(properties);
 			// create the POP3 store object and connect with the pop server
@@ -75,10 +77,13 @@ public class MailServiceStandard extends AbstractMailService {
 
 			// Optimisation de la lecture des emails, utiliser le fetch
 			FetchProfile fetchProfile = new FetchProfile();
-			fetchProfile.add(FetchProfile.Item.ENVELOPE);
-			fetchProfile.add(FetchProfile.Item.FLAGS);
+//			fetchProfile.add(FetchProfile.Item.ENVELOPE);
+//			fetchProfile.add(FetchProfile.Item.FLAGS);
 			fetchProfile.add(FetchProfile.Item.CONTENT_INFO);
+			
+			LOGGER.debug("[IMAP/POP3] Fetching email list");
 			emailFolder.fetch(messages, fetchProfile);
+			LOGGER.debug("[IMAP/POP3] Finished fetching email list");
 			
 			int index = 0;
 			for (Message message: messages) {
@@ -88,7 +93,7 @@ public class MailServiceStandard extends AbstractMailService {
 					Address from = message.getFrom()[0];
 					email.setFrom(from.toString());
 				}
-				email.setBody(message.getContent().toString());
+				email.setBody(getTextFromMessage(message));
 				
 				if(!filter.select(email)){
 					email = null;
@@ -98,15 +103,12 @@ public class MailServiceStandard extends AbstractMailService {
 				index++;
 				email.setIndex(index);
 				
-				// La sauvegarde des PJ à ce niveau est pour éviter la saturation 
-				// de la mémoire par les PJ
-				fetchPrepareFS(email, message);
+				fileSystem.prepareDirectory(email);
+				writeAttachment(email, message);
 				writeToEml(message, email);
-				if(index > 200){
-					break;
-				}
+				writeToTxt(email);
 				
-				emails.add(email);
+//				emails.add(email);
 				LOGGER.debug(String.format("[IMAP/POP3] got %d/%d emails", index, messages.length));
 			}
 			
@@ -132,11 +134,8 @@ public class MailServiceStandard extends AbstractMailService {
 	 * @throws IOException 
 	 * @throws FilesystemException 
 	 */
-	protected void fetchPrepareFS(Email email, Message message) throws FilesystemException, MessagingException, IOException{
+	protected void writeAttachment(Email email, Message message) throws FilesystemException, MessagingException, IOException{
 		Object content = message.getContent();
-		
-		FilesystemManager fileSystem = FilesystemManager.getInstance(config);
-		fileSystem.prepareDirectory(email);
 		
 		if (content instanceof Multipart) {
 			Multipart multipart = (Multipart) content;
@@ -150,7 +149,40 @@ public class MailServiceStandard extends AbstractMailService {
 			}
 		}
 	}
+	
+	private String getTextFromMessage(Message message) throws Exception {
+	    String result = "";
+	    if (message.isMimeType("text/plain")) {
+	        result = message.getContent().toString();
+	    } else if (message.isMimeType("multipart/*")) {
+	        MimeMultipart mimeMultipart = (MimeMultipart) message.getContent();
+	        result = getTextFromMimeMultipart(mimeMultipart);
+	    }
+	    else{
+	    	result = message.getContent().toString();
+	    }
+	    return result;
+	}
 
+	private String getTextFromMimeMultipart(
+	        MimeMultipart mimeMultipart) throws Exception{
+	    String result = "";
+	    int count = mimeMultipart.getCount();
+	    for (int i = 0; i < count; i++) {
+	        BodyPart bodyPart = mimeMultipart.getBodyPart(i);
+	        if (bodyPart.isMimeType("text/plain")) {
+	            result = result + "\n" + bodyPart.getContent();
+	            break; // without break same text appears twice in my tests
+	        } else if (bodyPart.isMimeType("text/html")) {
+	            String html = (String) bodyPart.getContent();
+	            result = result + "\n" + org.jsoup.Jsoup.parse(html).text();
+	        } else if (bodyPart.getContent() instanceof MimeMultipart){
+	            result = result + getTextFromMimeMultipart((MimeMultipart)bodyPart.getContent());
+	        }
+	    }
+	    return result;
+	}
+	
 	@Override
 	protected void writeToEml(Object messageObject, Email email) {
 		if (messageObject instanceof Message) {

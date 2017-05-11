@@ -22,11 +22,11 @@ import org.apache.log4j.Logger;
 
 import com.abek.outview.exception.FilesystemException;
 import com.abek.outview.exception.MailConnectException;
-import com.abek.outview.exception.OutputException;
 import com.abek.outview.manager.ConfigManager;
 import com.abek.outview.manager.FilesystemManager;
 import com.abek.outview.manager.FilterManager;
 import com.abek.outview.model.Email;
+import com.abek.outview.util.MailUtils;
 
 public class MailServiceStandard extends AbstractMailService {
 	private static Logger LOGGER = Logger.getLogger(MailServiceStandard.class);
@@ -37,12 +37,7 @@ public class MailServiceStandard extends AbstractMailService {
 	}
 
 	public List<Email> listEmails() throws MailConnectException {
-		return emails;
-	}
-
-	@Override
-	public void writeEmail(Email email) throws OutputException {
-		
+		return emailCollector.getEmails();
 	}
 
 	/**
@@ -77,8 +72,7 @@ public class MailServiceStandard extends AbstractMailService {
 
 			// Optimisation de la lecture des emails, utiliser le fetch
 			FetchProfile fetchProfile = new FetchProfile();
-//			fetchProfile.add(FetchProfile.Item.ENVELOPE);
-//			fetchProfile.add(FetchProfile.Item.FLAGS);
+			fetchProfile.add(FetchProfile.Item.ENVELOPE);
 			fetchProfile.add(FetchProfile.Item.CONTENT_INFO);
 			
 			LOGGER.debug("[IMAP/POP3] Fetching email list");
@@ -86,6 +80,7 @@ public class MailServiceStandard extends AbstractMailService {
 			LOGGER.debug("[IMAP/POP3] Finished fetching email list");
 			
 			int index = 0;
+			int limit = config.getMaxEmailsLimit();
 			for (Message message: messages) {
 				Email email = new Email();
 				email.setSubject(message.getSubject());
@@ -94,8 +89,10 @@ public class MailServiceStandard extends AbstractMailService {
 					email.setFrom(from.toString());
 				}
 				email.setBody(getTextFromMessage(message));
+				email.setHasAttachment(hasAttachment(message));
 				
 				if(!filter.select(email)){
+					LOGGER.debug("[IMAP/POP3] not selected");
 					email = null;
 					continue;
 				}
@@ -104,23 +101,34 @@ public class MailServiceStandard extends AbstractMailService {
 				email.setIndex(index);
 				
 				fileSystem.prepareDirectory(email);
-				writeAttachment(email, message);
-				writeToEml(message, email);
-				writeToTxt(email);
+				try{
+					writeAttachment(message, email);
+					writeToEml(message, email);
+					writeToTxt(email);
+				}catch (Exception e) {
+					//Ne pas arreter le traitement de la boucle
+					LOGGER.error("[FS Manager] Failed writing attachment: "+e.getMessage(), e);
+				}
 				
-//				emails.add(email);
+				//On ajoute l'email à la collection tirée par expéditeur
+				
+				addEmailToSendersCollection(email);
+				
+				//On contrôle la limite
+				if(limit > 0 && index > limit){
+					break;
+				}
 				LOGGER.debug(String.format("[IMAP/POP3] got %d/%d emails", index, messages.length));
 			}
 			
-			LOGGER.debug(String.format("[IMAP/POP3] Found %d emails", emails.size()));
-			
+			LOGGER.debug(String.format("[IMAP/POP3] Found %d emails", MailUtils.getEmailCount(emailCollector)));
+			initializeDescriptors(emailCollector);
 			emailFolder.close(false);
 			store.close();
 
-		} catch (MessagingException e) {
-			e.printStackTrace();
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOGGER.error("[IMAP/POP3] Failed on reading emails: "+e.getMessage(), e);
+			throw new MailConnectException("Failed on reading emails");
 		}
 
 		LOGGER.debug("[IMAP/POP3] Finished Initializing connection");
@@ -134,7 +142,7 @@ public class MailServiceStandard extends AbstractMailService {
 	 * @throws IOException 
 	 * @throws FilesystemException 
 	 */
-	protected void writeAttachment(Email email, Message message) throws FilesystemException, MessagingException, IOException{
+	protected void writeAttachment(Message message, Email email) throws FilesystemException, MessagingException, IOException{
 		Object content = message.getContent();
 		
 		if (content instanceof Multipart) {
@@ -150,13 +158,50 @@ public class MailServiceStandard extends AbstractMailService {
 		}
 	}
 	
+	@Override
+	protected void writeAttachment(Object messageObject, Email email) {
+		
+	}
+	
+	/**
+	 * Vérifie si le mail contient des PJ ou non
+	 * @return
+	 */
+	private boolean hasAttachment(Message message){
+		try {
+			Object content = message.getContent();
+
+			if (content instanceof Multipart) {
+				Multipart multipart = (Multipart) content;
+
+				for (int i = 0; i < multipart.getCount(); i++) {
+					BodyPart bodyPart;
+					bodyPart = multipart.getBodyPart(i);
+					if (!Part.ATTACHMENT.equalsIgnoreCase(bodyPart.getDisposition())) {
+						continue; // dealing with attachments only
+					}
+					return true;
+				}
+			}
+		} catch (MessagingException | IOException e) {
+			e.printStackTrace();
+		}
+		return false;
+	}
+	
+	/**
+	 * Retourne le contenu textuel du mail
+	 * @param message
+	 * @return
+	 * @throws Exception
+	 */
 	private String getTextFromMessage(Message message) throws Exception {
 	    String result = "";
 	    if (message.isMimeType("text/plain")) {
 	        result = message.getContent().toString();
 	    } else if (message.isMimeType("multipart/*")) {
 	        MimeMultipart mimeMultipart = (MimeMultipart) message.getContent();
-	        result = getTextFromMimeMultipart(mimeMultipart);
+	        result = MailUtils.getTextFromMimeMultipart(mimeMultipart);
 	    }
 	    else{
 	    	result = message.getContent().toString();
@@ -164,25 +209,9 @@ public class MailServiceStandard extends AbstractMailService {
 	    return result;
 	}
 
-	private String getTextFromMimeMultipart(
-	        MimeMultipart mimeMultipart) throws Exception{
-	    String result = "";
-	    int count = mimeMultipart.getCount();
-	    for (int i = 0; i < count; i++) {
-	        BodyPart bodyPart = mimeMultipart.getBodyPart(i);
-	        if (bodyPart.isMimeType("text/plain")) {
-	            result = result + "\n" + bodyPart.getContent();
-	            break; // without break same text appears twice in my tests
-	        } else if (bodyPart.isMimeType("text/html")) {
-	            String html = (String) bodyPart.getContent();
-	            result = result + "\n" + org.jsoup.Jsoup.parse(html).text();
-	        } else if (bodyPart.getContent() instanceof MimeMultipart){
-	            result = result + getTextFromMimeMultipart((MimeMultipart)bodyPart.getContent());
-	        }
-	    }
-	    return result;
-	}
-	
+	/**
+	 * Ecrit l'email en fichier de sortie EML
+	 */
 	@Override
 	protected void writeToEml(Object messageObject, Email email) {
 		if (messageObject instanceof Message) {
@@ -195,4 +224,5 @@ public class MailServiceStandard extends AbstractMailService {
 			}
 		}
 	}
+
 }

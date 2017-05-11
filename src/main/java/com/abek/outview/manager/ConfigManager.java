@@ -89,6 +89,18 @@ public class ConfigManager implements IManager{
 		return properties.getProperty(AppConstants.PROPERTY_MAIL_PASSWORD);
 	}
 	
+	public int getMaxEmailsLimit(){
+		String maxValue = properties.getProperty(AppConstants.PROPERTY_MAIL_LIMIT, "");
+		int limit = 0;
+		
+		try{
+			limit = Integer.valueOf(maxValue);
+		}catch (Exception e) {
+		}
+		
+		return limit;
+	}
+	
 	/**
 	 * retourne le répertoire utilisé pour sauvegarder les emails
 	 * @return

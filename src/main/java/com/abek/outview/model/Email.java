@@ -14,6 +14,7 @@ public class Email {
 	private String subject;
 	private String body;
 	private int index;
+	private boolean hasAttachment;
 	private List<PJ> attachments;
 	
 	public Email() {
@@ -68,6 +69,14 @@ public class Email {
 
 	public void setIndex(int index) {
 		this.index = index;
+	}
+
+	public boolean isHasAttachment() {
+		return hasAttachment;
+	}
+
+	public void setHasAttachment(boolean hasAttachment) {
+		this.hasAttachment = hasAttachment;
 	}
 
 	@Override

@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 
-import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.log4j.Logger;
 
 import com.abek.outview.AppConstants;
@@ -16,6 +15,8 @@ import com.abek.outview.exception.FilterException;
 import com.abek.outview.exception.ManagerException;
 import com.abek.outview.manager.interfaces.IManager;
 import com.abek.outview.model.Email;
+import com.abek.outview.util.HTMLUtils;
+import com.abek.outview.util.MailUtils;
 
 public class FilesystemManager implements IManager {
 	private static Logger LOGGER = Logger.getLogger(FilesystemManager.class);
@@ -109,8 +110,7 @@ public class FilesystemManager implements IManager {
 	 * @return
 	 */
 	private String getFolderFor(Email email) {
-		String cleanName = email.getFrom().replaceAll("[<>]+", "");
-		cleanName = cleanName.replaceAll("[\\W+]", "_");
+		String cleanName = MailUtils.getSenderCleanName(email);
 		return cleanName;
 	}
 
@@ -121,28 +121,28 @@ public class FilesystemManager implements IManager {
 	 * @throws FilesystemException 
 	 */
 	public void writeAttachment(InputStream inputStream, String filename, Email email) throws FilesystemException {
-			//Pièce jointe si présente (<numéro>_<nom pièce  jointe>.<extension pièce jointe>)
-			String attachmentFilname = getEmailFolder(email);
-			attachmentFilname += File.separator + email.getIndex() + "_" + filename;
-			
-			LOGGER.debug("[FS Manager] writing PJ: "+attachmentFilname);
-		try {
-			FileOutputStream fios = new FileOutputStream(attachmentFilname);
-			byte[] buffer = new byte[1024 * 32];
-	        int len = inputStream.read(buffer);
-	        
-	        while (len != -1) {
-	        	fios.write(buffer, 0, len);
-	            len = inputStream.read(buffer);
-	        }
-	        
-	        inputStream.close();
-	        fios.flush();
-	        fios.close();
-		} catch (IOException  e) {
-			LOGGER.error("[FS Manager] Failed writing attachment: "+e.getMessage());
-			throw new FilesystemException(e);
-		}
+		//Pièce jointe si présente (<numéro>_<nom pièce  jointe>.<extension pièce jointe>)
+		String attachmentFilname = getEmailFolder(email);
+		attachmentFilname += File.separator + email.getIndex() + "_" + filename;
+		
+		LOGGER.debug("[FS Manager] writing PJ: "+attachmentFilname);
+//		try {
+//			FileOutputStream fios = new FileOutputStream(attachmentFilname);
+//			byte[] buffer = new byte[1024 * 32];
+//	        int len = inputStream.read(buffer);
+//	        
+//	        while (len != -1) {
+//	        	fios.write(buffer, 0, len);
+//	            len = inputStream.read(buffer);
+//	        }
+//	        
+//	        inputStream.close();
+//	        fios.flush();
+//	        fios.close();
+//		} catch (IOException  e) {
+//			LOGGER.error("[FS Manager] Failed writing attachment: "+e.getMessage());
+//			throw new FilesystemException(e);
+//		}
 		LOGGER.debug("[FS Manager] Finished writing attachment");
 	}
 
@@ -166,8 +166,13 @@ public class FilesystemManager implements IManager {
 		mailContent.append("\n");
 		mailContent.append("\n");
 		String rawBody = email.getBody();
-		String escapedBody = StringEscapeUtils.escapeHtml4(rawBody);
-		mailContent.append(escapedBody);
+		String escapedBody;
+		try {
+			escapedBody = HTMLUtils.extractText(rawBody);
+			mailContent.append(escapedBody);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		
 		
 		PrintWriter out = new PrintWriter(filename);

@@ -95,10 +95,10 @@ public class FilterManager implements IManager{
 		//Filtre PJ
 		if(!AppConstants.FILTER_ALL.equals(pj)){
 			if(AppConstants.FILTER_WITH_PJ.equals(pj) ){
-				select &= !email.getAttachments().isEmpty();
+				select &= email.isHasAttachment();
 			}
 			else if(AppConstants.FILTER_WITHOUT_PJ.equals(pj)){
-				select &= email.getAttachments().isEmpty();
+				select &= !email.isHasAttachment();
 			}
 		}
 		
